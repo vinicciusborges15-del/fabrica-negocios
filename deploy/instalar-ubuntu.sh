@@ -58,7 +58,7 @@ case "$(uname -m)" in
 esac
 
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl python3 git
+DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl python3 git bubblewrap
 task_tmp=$(mktemp -d)
 trap 'rm -rf -- "$task_tmp"' EXIT HUP INT TERM
 archive="$task_tmp/codex.tar.gz"
