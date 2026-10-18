@@ -1,0 +1,34 @@
+{
+  "checked_at": "2026-10-18",
+  "country": "BR",
+  "note": "Catálogo de fontes oficiais, não são trabalhos contratados nem garantia de disponibilidade ou pagamento imediato. Tarefas pessoais não são delegadas ao agente.",
+  "platforms": [
+    {
+      "name": "Prolific",
+      "type": "pesquisas com participantes humanos",
+      "brazil": "Brasil está na lista; admissão e estudos disponíveis variam",
+      "payout": "PayPal; mínimo combinado de £6/US$6 aprovado; saque até 24h, mas estudo pode levar até 22 dias para aprovação",
+      "autonomous_agent": false,
+      "ai_rule": "Não usar IA nas respostas, salvo pedido expresso do pesquisador",
+      "sources": ["https://participant-help.prolific.com/en/articles/445007-who-can-participate-in-studies-on-prolific", "https://participant-help.prolific.com/en/articles/445062-how-do-i-cash-out-on-prolific", "https://participant-help.prolific.com/en/articles/445029-can-i-use-ai-assistance-tools-in-my-submission"]
+    },
+    {
+      "name": "uTest",
+      "type": "testes de software e relatos de bugs",
+      "brazil": "Projetos variam por país, dispositivo e qualificação",
+      "payout": "Dia 15 e último dia do mês; PayPal/Payoneer conforme país",
+      "autonomous_agent": false,
+      "ai_rule": "Apoio genérico limitado; não enviar dados confidenciais ou específicos de cliente para IA",
+      "sources": ["https://www.utest.com/projects?country=Brazil&tab=all", "https://support.utest.com/csp?id=kb_article_view&sysparm_article=KB0010033", "https://www.utest.com/terms-and-conditions"]
+    },
+    {
+      "name": "UserTesting",
+      "type": "testes e feedback de usabilidade humano",
+      "brazil": "Elegibilidade depende da demanda e é confirmada no cadastro",
+      "payout": "PayPal em USD; normalmente 14 dias após teste aprovado, sem mínimo",
+      "autonomous_agent": false,
+      "ai_rule": "Código de conduta proíbe respostas geradas por IA na plataforma/testes",
+      "sources": ["https://participant-support.usertesting.com/hc/en-us/articles/38814220821523-FAQ-Payments", "https://participant-support.usertesting.com/hc/en-us/articles/37395412977427-Contributor-Code-of-Conduct"]
+    }
+  ]
+}

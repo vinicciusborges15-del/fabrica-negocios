@@ -1,0 +1,8 @@
+{
+  "name": "Ferramenta local de demonstração",
+  "hypothesis": "Uma ferramenta pequena pode ajudar pessoas a organizar uma tarefa repetitiva. A hipótese precisa ser discutida com usuários reais antes de qualquer conclusão comercial.",
+  "product": "Crie uma página HTML em português, sem dependências externas, com uma lista de tarefas editável e impressão. Identifique dados de demonstração como fictícios. Não colete dados em servidores nem invente depoimentos, clientes ou vendas.",
+  "distribution": "Prepare uma demonstração e uma lista de ações para revisão do responsável. Não envie mensagens nem publique o produto.",
+  "evidence": [],
+  "duration_days": 7
+}

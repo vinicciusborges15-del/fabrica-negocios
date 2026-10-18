@@ -1,0 +1,21 @@
+[Unit]
+Description=Fabrica de Negocios - monitor sem tarefas Codex
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=fabrica
+Group=fabrica
+WorkingDirectory=/opt/fabrica-negocios
+Environment=FABRICA_HOME=/var/lib/fabrica
+Environment=PATH=/opt/fabrica-runtime/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/python3 -m fabrica.worker --home /var/lib/fabrica --interval 3600
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
