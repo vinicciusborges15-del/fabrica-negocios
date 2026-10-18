@@ -67,6 +67,23 @@ Esses comandos não iniciam uma tarefa Codex. Para uma execução manual explici
 
 O monitor padrão não executa tarefas. A opção `--armed` do worker permite essa execução e exige uma decisão separada do responsável após as verificações. A presença dessa opção no código não significa que esteja habilitada no serviço fornecido.
 
+## Primeira rodada limitada
+
+O helper `deploy/primeira-rodada.py` prepara uma única rodada de planejamento para a hipótese **Orçamento Fácil para prestadores**. A proposta é uma ferramenta HTML offline para montar e imprimir orçamentos; demanda e preço ainda precisam ser testados com compradores reais.
+
+```sh
+python3 deploy/primeira-rodada.py --verificar
+```
+
+Esse modo mostra a hipótese e a execução prevista sem consultar credenciais, executar subprocessos ou alterar arquivos. A execução real exige a instalação existente, Ubuntu 24.04 e login ChatGPT do usuário `fabrica`. O helper valida o host e inicia uma unidade transitória do sistema chamada `fabrica-primeira-rodada`, executada como `fabrica`. Dentro dela, confere o sandbox, a autenticação, o estado inicial e a rodada prevista antes de cadastrar a hipótese ou executar IA. O bloqueio do controlador é mantido durante essa operação, incluindo a execução, para impedir avanço concorrente. A unidade continua se a sessão SSH cair, termina após uma rodada e não ativa o monitor para executar IA. Configuração de timeout superior a 900 segundos bloqueia esse primeiro disparo.
+
+O cadastro e o disparo verificam o estado para evitar duplicações. Estado incompatível ou uma rodada já registrada exigem inspeção. Não remova o marcador da unidade nem tente contornar essa proteção para repetir a execução. Uma unidade iniciada não comprova conclusão: confira o estado do controlador e a presença de `PLAN.md` e `OWNER_ACTIONS.md` no workspace. Essa etapa produz o plano; construção, publicação e vendas são etapas posteriores.
+
+```sh
+sudo systemctl show fabrica-primeira-rodada.service -p ActiveState -p SubState -p Result -p ExecMainStatus
+sudo journalctl -u fabrica-primeira-rodada.service -n 30 --no-pager
+```
+
 ## Operação e limites
 
 `python3 -m fabrica --help` lista os comandos. Use sempre `--home /var/lib/fabrica` ao operar os dados do serviço; para testes locais, escolha uma pasta separada.
