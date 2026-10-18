@@ -97,6 +97,69 @@ def download_and_extract(destination: Path) -> tuple[Path, list[str]]:
     return root, verify_manifest(root)
 
 
+def cloud_init_report(completed) -> dict:
+    """Resumo sem mensagens de erro, user-data ou detalhes do provedor."""
+    try:
+        payload = json.loads(completed.stdout)
+    except (ValueError, TypeError):
+        payload = None
+    valid = isinstance(payload, dict)
+    payload = payload if valid else {}
+    errors = payload.get("errors")
+    recoverable = payload.get("recoverable_errors")
+    valid = valid and isinstance(errors, list) and all(isinstance(item, str) for item in errors)
+    valid = valid and isinstance(recoverable, dict) and all(
+        isinstance(items, list) and all(isinstance(item, str) for item in items)
+        for items in recoverable.values()
+    )
+    fatal_count = len(errors) if isinstance(errors, list) else None
+    warning_count = sum(len(items) for items in recoverable.values()) if valid else None
+    # Cloud-init pode chamar ERROR/CRITICAL de recuperáveis; não os tratamos
+    # como simples avisos. Níveis desconhecidos também exigem investigação.
+    warning_levels_only = isinstance(recoverable, dict) and all(
+        level in {"WARNING", "DEPRECATED"} or not items
+        for level, items in recoverable.items()
+    )
+    status = payload.get("status")
+    extended = payload.get("extended_status")
+    clean = completed.returncode == 0 and status == "done" and extended == "done" and warning_count == 0
+    degraded = completed.returncode == 2 and status == "done" and extended == "degraded done" and warning_count is not None and warning_count > 0
+    allowed_states = {"done", "running", "not started", "disabled", "error"}
+    allowed_extended = allowed_states | {"degraded done", "degraded running", "error - done", "error - running", "error - not started", "error - disabled"}
+    return {
+        "component": "cloud-init",
+        "returncode": completed.returncode,
+        "status": status if isinstance(status, str) and status in allowed_states else "unknown",
+        "extended_status": extended if isinstance(extended, str) and extended in allowed_extended else "unknown",
+        "fatal_error_count": fatal_count,
+        "recoverable_error_count": warning_count,
+        "json_schema_valid": bool(valid),
+        "stderr_present": bool(completed.stderr),
+        "approved": bool(valid and fatal_count == 0 and warning_levels_only and (clean or degraded)),
+    }
+
+
+def wait_for_cloud_init() -> None:
+    try:
+        completed = subprocess.run(
+            ["cloud-init", "status", "--wait", "--format=json"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False, timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print(json.dumps({"component": "cloud-init", "returncode": None, "status": "unknown", "extended_status": "unknown", "error": "timeout", "timeout_seconds": 120, "approved": False}), flush=True)
+        raise SystemExit("Cloud-init não concluiu no prazo; nenhum instalador foi iniciado.")
+    except OSError:
+        print(json.dumps({"component": "cloud-init", "returncode": None, "status": "unknown", "extended_status": "unknown", "error": "command_unavailable", "approved": False}), flush=True)
+        raise SystemExit("Não foi possível consultar cloud-init; nenhum instalador foi iniciado.")
+    report = cloud_init_report(completed)
+    print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
+    if not report["approved"]:
+        raise SystemExit("Cloud-init não confirmou conclusão segura; nenhum instalador foi iniciado.")
+    if report["returncode"] == 2:
+        print("Cloud-init concluiu com avisos recuperáveis. A próxima etapa instala somente o monitor.", flush=True)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verificar", action="store_true", help="Baixar, verificar e extrair sem instalar; não exige root")
@@ -116,7 +179,7 @@ def main(argv=None) -> int:
         if args.verificar:
             print("Verificação concluída; nenhum instalador, cloud-init ou serviço foi executado.")
             return 0
-        subprocess.run(["cloud-init", "status", "--wait"], check=True, timeout=180)
+        wait_for_cloud_init()
         script = root / "deploy" / "instalar-ubuntu.sh"
         print("Pacote conferido. Instalando a base; aguarde...", flush=True)
         result = subprocess.run([
