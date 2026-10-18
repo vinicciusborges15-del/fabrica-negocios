@@ -18,8 +18,8 @@ import urllib.parse
 import urllib.request
 
 
-SOURCE_COMMIT = "7bfad7131efd9a5b88a14983ab593367109f5f23"
-SOURCE_SHA256 = "5fd09a89a47861c07681a1120130bbfa1cf74e058c7e5af4c497101586c7c69c"
+SOURCE_COMMIT = "7a1c22974d8e63cb9c4e1c6c565b50eb25154f99"
+SOURCE_SHA256 = "386b36ed40fdc8ada6c358b6e7b2646ce5e822f60f569b41d8b15614c650f1a4"
 SOURCE_URL = (
     "https://codeload.github.com/vinicciusborges15-del/fabrica-negocios/tar.gz/"
     + SOURCE_COMMIT
