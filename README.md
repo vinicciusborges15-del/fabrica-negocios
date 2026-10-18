@@ -22,6 +22,16 @@ Revise os arquivos de `deploy/`. Depois de baixar uma revisão imutável e confe
 sudo sh deploy/instalar-ubuntu.sh
 ```
 
+`deploy/instalar-remoto.py` é um helper de distribuição para Python 3.12 ou posterior. Baixa um pacote-fonte público por commit imutável, confere o SHA-256 esperado, extrai somente arquivos regulares e diretórios e verifica o manifesto antes de iniciar o instalador. A revisão instalada fica explicitamente fixada no helper; publicar uma nova revisão do helper não muda automaticamente o pacote-fonte instalado.
+
+Para conferir download, hashes e lista de arquivos sem root ou alterações no sistema:
+
+```sh
+python3 deploy/instalar-remoto.py --verificar
+```
+
+Esse modo extrai em uma pasta temporária removida ao terminar; não executa `cloud-init`, `systemd-run`, serviços ou instaladores. Sem `--verificar`, o helper exige root e Ubuntu 24.04 e recusa destino existente antes de baixar o pacote. Aguarda `cloud-init`, inicia o instalador com uma unidade transitória de `systemd` e mostra o diário da instalação. Nenhum dos modos faz login no Codex ou executa IA. O conteúdo do próprio helper também deve ser revisado e conferido antes de executá-lo.
+
 O instalador verifica a versão do Ubuntu, instala dependências de sistema, baixa uma versão fixa do Codex CLI do repositório oficial OpenAI e verifica o SHA-256 do binário. Cria o usuário de serviço `fabrica`, guarda o código em `/opt/fabrica-negocios`, o executável em `/opt/fabrica-runtime/bin` e dados privados em `/var/lib/fabrica`. Realiza um teste local do sandbox, sem autenticar ou chamar modelos.
 
 O pacote aceita somente primeira instalação: se `/opt/fabrica-negocios` já existir, o instalador encerra antes de alterar código ou dados. Não mescla arquivos antigos nem remove uma instalação anterior. Atualizações exigem revisão separada.
