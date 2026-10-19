@@ -84,6 +84,17 @@ sudo systemctl show fabrica-primeira-rodada.service -p ActiveState -p SubState -
 sudo journalctl -u fabrica-primeira-rodada.service -n 30 --no-pager
 ```
 
+## Diagnóstico de uma rodada
+
+`deploy/diagnosticar-rodada.py` consulta a primeira e a última execução registrada, sem repetir tarefas ou alterar seu estado. Abre o banco SQLite somente para leitura, exige ausência de journal pendente e verifica os caminhos dos logs. A saída contém metadados validados, categorias de erro, códigos conhecidos, contagens e fingerprints. Não imprime mensagens arbitrárias, prompts, respostas do agente ou credenciais.
+
+```sh
+python3 deploy/diagnosticar-rodada.py --verificar
+sudo python3 deploy/diagnosticar-rodada.py
+```
+
+`--verificar` mostra somente a proposta estática, sem ler arquivos operacionais ou consultar a conta do sistema. A coleta real aceita apenas `root` ou `fabrica`; não chama modelos, serviços ou subprocessos. Categorias são pistas de diagnóstico, não comprovação isolada da causa. Se a execução estiver ativa ou o banco mudar durante a consulta, aguarde antes de coletar novamente. Preserve o experimento pausado até revisar a falha.
+
 ## Operação e limites
 
 `python3 -m fabrica --help` lista os comandos. Use sempre `--home /var/lib/fabrica` ao operar os dados do serviço; para testes locais, escolha uma pasta separada.
