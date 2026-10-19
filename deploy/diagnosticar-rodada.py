@@ -12,22 +12,26 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import stat
 import sys
 from urllib.parse import quote
 
 
 HOME_DIR = Path("/var/lib/fabrica")
 MAX_LOG_BYTES = 262144
+RUNTIME_HELPERS = (Path("/opt/fabrica-runtime/bin/codex-code-mode-host"), Path("/opt/fabrica-runtime/bin/codex-resources/codex-code-mode-host"))
 RULES = {
     "autenticacao_remota": r"unauthorized|unauthenticated|invalid_api_key|token.{0,50}(expired|refresh)|please (log|sign) in|autenticação",
     "limite_de_uso": r"usage.limit|quota|rate.limit|too many requests|limite.*uso",
     "sandbox_permissao": r"bubblewrap|bwrap|apparmor|landlock|permission denied|operation not permitted|user namespace|failed to.*sandbox",
     "configuracao": r"error loading configuration|failed to load config|toml|permission profile|unknown field|invalid config",
     "argumentos_cli": r"unexpected argument|unrecognized option|unknown option|invalid value|usage: codex",
-    "schema_resposta": r"invalid.schema|json.schema|output.schema|additionalproperties|response.format|esquema solicitado",
+    "schema_resposta": r"invalid.schema|json.schema|output.schema|additionalproperties|response.format|esquema solicitado|json exigido",
     "modelo_acesso": r"model.{0,100}(not found|not supported|not available|does not exist)|not have access|access denied|forbidden",
     "rede_tls": r"connection (refused|reset)|network.*unreachable|certificate|tls|dns|timed? out|connection.*closed",
     "disco_cheio": r"no space left|disk quota|read.only file system",
+    "ferramenta_execucao": r"tool unavailable|cannot execute|createprocess|no such file or directory|failed to (spawn|start).*process|execve|não foi encontrado",
+    "gravacao_artefato": r"failed to write last message|failed to write.*file|entregáveis não encontrados",
 }
 SAFE_CODES = {"invalid_request_error", "invalid_json_schema", "invalid_api_key", "insufficient_quota", "rate_limit_exceeded", "model_not_found", "usage_limit_reached"}
 SAFE_OPTIONS = {"--sandbox", "--output-schema", "--json", "--ephemeral", "--skip-git-repo-check", "sandbox_workspace_write.network_access", "workspace-write"}
@@ -38,7 +42,10 @@ SAFE_FRAGMENTS = {
     "not a trusted directory", "no such file or directory", "connection refused",
     "refresh token has already been used", "invalid schema", "response_format",
     "no space left on device", "the following required arguments were not provided",
+    "tool unavailable", "cannot execute", "createprocess", "failed to spawn",
+    "failed to start", "failed to create process", "execve",
 }
+SAFE_PATHS = {"PLAN.md", "OWNER_ACTIONS.md", "last-message.txt", "/bin/bash", "/usr/bin/bash", "/bin/sh", "/bin/zsh", "/usr/bin/zsh", "/usr/bin/bwrap", "/usr/bin/rg", "/usr/bin/python3", "apply_patch", "codex-linux-sandbox", "codex-exec-server", "codex-code-mode-host", "node", "bash", "sh", "python3"}
 
 
 def regular_path(path: Path) -> Path:
@@ -71,6 +78,7 @@ def classify(text: str) -> dict:
         "known_error_codes": sorted(code for code in SAFE_CODES if code in lowered),
         "known_options_mentioned": sorted(option for option in SAFE_OPTIONS if option in text),
         "whitelisted_error_fragments": sorted(fragment for fragment in SAFE_FRAGMENTS if fragment in lowered),
+        "known_paths_mentioned": sorted(path for path in SAFE_PATHS if re.search((r"(?<![\w/.-])" if path.startswith("/") else r"(?<![\w.-])") + re.escape(path) + r"(?![\w/.-])", text)),
         "error_fingerprint_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "inspected_error_lines": len([line for line in text.splitlines() if line.strip()]),
     }
@@ -93,10 +101,23 @@ def inspect_run(row) -> dict:
     if row["stage"] not in {"research", "build", "operating"}:
         report["stage"] = "unknown"
     text = ""
+    report.update(runner_ok=None, payload_outcome="unknown")
     try:
         result = json.loads(row["result"] or "{}")
-        if isinstance(result, dict) and isinstance(result.get("error"), str):
-            text += result["error"] + "\n"
+        if isinstance(result, dict):
+            report["runner_ok"] = result.get("ok") if type(result.get("ok")) is bool else None
+            if isinstance(result.get("error"), str):
+                text += result["error"] + "\n"
+            payload = result.get("result")
+            if isinstance(payload, dict):
+                outcome = payload.get("outcome")
+                report["payload_outcome"] = outcome if isinstance(outcome, str) and outcome in {"complete", "blocked"} else "unknown"
+                payload_text = payload.get("summary") if isinstance(payload.get("summary"), str) else ""
+                blockers = payload.get("blockers")
+                if isinstance(blockers, list):
+                    payload_text += "\n" + "\n".join(item for item in blockers if isinstance(item, str))
+                report["payload_categories"] = classify(payload_text)["categories"]
+                text += "\n" + payload_text
     except (ValueError, TypeError):
         report["result_json_valid"] = False
     raw = row["run_dir"]
@@ -112,6 +133,8 @@ def inspect_run(row) -> dict:
     stdout, report["stdout_bytes"] = read_log(directory / "stdout.jsonl")
     text += stderr
     counts = Counter()
+    item_counts = Counter()
+    commands = []
     for line in stdout.splitlines():
         try:
             event = json.loads(line)
@@ -130,8 +153,34 @@ def inspect_run(row) -> dict:
                 error = error.get("message", "")
             if isinstance(error, str):
                 text += "\n" + error
+        item = event.get("item")
+        if kind == "item.completed" and isinstance(item, dict):
+            item_type = item.get("type")
+            if isinstance(item_type, str) and item_type in {"command_execution", "agent_message", "reasoning", "file_change", "mcp_tool_call", "todo_list", "error"}:
+                item_counts[item_type] += 1
+                if item_type == "error" and isinstance(item.get("message"), str):
+                    text += "\n" + item["message"]
+                if item_type == "command_execution":
+                    output = item.get("aggregated_output")
+                    output = output if isinstance(output, str) else ""
+                    text += "\n" + output
+                    if len(commands) < 20:
+                        code = item.get("exit_code")
+                        command = item.get("command")
+                        tools = classify(command)["known_paths_mentioned"] if isinstance(command, str) else []
+                        commands.append({"exit_code": code if type(code) is int else None, "known_tools_in_command": tools, **classify(output)})
     report.update(classify(text))
     report["event_counts"] = dict(counts)
+    report["item_counts"] = dict(item_counts)
+    report["command_diagnostics"] = commands
+    report["required_file_flags"] = {}
+    for name in ("PLAN.md", "OWNER_ACTIONS.md"):
+        try:
+            info = (expected_parent.parent / name).lstat()
+            regular = stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+            report["required_file_flags"][name] = {"regular": regular, "bytes": info.st_size if regular else None}
+        except FileNotFoundError:
+            report["required_file_flags"][name] = {"regular": False, "bytes": None}
     report["logs_available"] = True
     report["raw_messages_printed"] = False
     return report
@@ -155,7 +204,7 @@ def collect() -> dict:
     after = database.stat()
     if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
         raise ValueError("Banco mudou durante a leitura; não foi emitido diagnóstico parcial.")
-    return {"read_only": True, "total_runs": total, "runs": [inspect_run(row) for row in rows], "credentials_read": False}
+    return {"read_only": True, "total_runs": total, "runs": [inspect_run(row) for row in rows], "runtime_helpers_present": {str(path): path.is_file() for path in RUNTIME_HELPERS}, "credentials_read": False}
 
 
 def main(argv=None) -> int:

@@ -86,7 +86,7 @@ sudo journalctl -u fabrica-primeira-rodada.service -n 30 --no-pager
 
 ## Diagnóstico de uma rodada
 
-`deploy/diagnosticar-rodada.py` consulta a primeira e a última execução registrada, sem repetir tarefas ou alterar seu estado. Abre o banco SQLite somente para leitura, exige ausência de journal pendente e verifica os caminhos dos logs. A saída contém metadados validados, categorias de erro, códigos conhecidos, contagens e fingerprints. Não imprime mensagens arbitrárias, prompts, respostas do agente ou credenciais.
+`deploy/diagnosticar-rodada.py` consulta a primeira e a última execução registrada, sem repetir tarefas ou alterar seu estado. Abre o banco SQLite somente para leitura, exige ausência de journal pendente e verifica os caminhos dos logs. A saída distingue o resultado do runner do estado final da resposta, classifica avisos e falhas de ferramentas e informa somente metadados dos entregáveis esperados. Inclui categorias de erro, códigos conhecidos, contagens e fingerprints. Não imprime mensagens arbitrárias, prompts, respostas do agente ou credenciais.
 
 ```sh
 python3 deploy/diagnosticar-rodada.py --verificar
